@@ -1,0 +1,55 @@
+---
+title: "Heteroskedastic Data Modeling"
+author: "Jonathan Bryan"
+date: "April 20, 2018"
+output: pdf_document
+---
+
+## Problem
+
+Many statistical models assume constant variance of the error term when modeling a response variable against predictors. Heteroskedasticity breaks this assumption and can present unique challenges to inference and prediction. Heteroskedasticity occurs when the conditional variance of the response $Y$ given the predictors $X$ is also a function of $t$ time or some vairable that has an ordered scale. In other words, the variance of the error term may change over time or over some ordered variable. Classic examples include variation in consumption habits increasing with income (more money to buy various goods) and 
+
+## Approach
+A survey of exploratory data analysis methods is given to show how heteroskedasticity can be observed in data. A comparison of _____ models is given to highlight advantages and disadvantages to different approaches. 
+
+## Infering Heteroskedascity in Data
+
+We simulate three different datasets, using $p=1,\; p=2,\; p = 10$. We use the $p=10$ dataset to explore the effect of multicollinearity on linear regression when heterskedasticity is present.
+```{r}
+#load libraries
+library(plotly)
+
+#Generate simulated data p=1
+set.seed(1)
+x_1 = sort(rnorm(100,0,1))
+y = rep(NA,100)
+
+for (i in 1:100){
+  sigma = i*0.02
+  y[i] = 10 + 2*x_1[i] + rnorm(1,0,sigma)
+  
+}
+plot(x_1,y, main = "Fig.1 Heteroskedastic Data p=1")
+```
+```{r}
+#Generate simulated data p=2
+set.seed(1)
+x_2 = sort(rnorm(100,0,1))
+y = rep(NA,100)
+
+for (i in 1:100){
+  sigma = i*0.02
+  y[i] = 10 + 2*x_1[i] + -(1/2)*x_2[i] + rnorm(1,0,sigma)
+  
+}
+plot(x_2,y)
+plot_ly(x = x_1,y = x_2, z=y, type = "contour")
+```
+
+
+```{r}
+lm.fit = lm(y ~ x)
+summary(lm.fit)
+par(mfrow=c(2,2))
+plot(lm.fit)
+```
