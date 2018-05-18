@@ -1,0 +1,355 @@
+---
+title: "Robust Regression"
+author: "Jonathan Bryan"
+date: "April 26, 2018"
+output: pdf_document
+---
+Packages
+https://cran.r-project.org/web/views/Robust.html
+
+## Problem
+Common regression methods such as ordinary least squares (OLS) make strong assumptions about the the behavior of errors. Such methods often assume errors have constant variance (homoskedasticity), no autocorrelation, and normality. This is expected given the parametric forumlation of OLS regression $Y \overset{iid}{\sim} N(X^T\beta, \sigma_{\epsilon}^2)$. Commonly outliers and influential observations cand drasticaly lower the optimality of OLS regression. Divergence from these modelling assumptions is not rare and making OLS regression sensitive to response variable outliers, high leverage points, heteroskedastic errors, and autocorrelation.
+
+## Approach
+Robust regression methods have been developed to overcome these challenges through parametric and non-parametric solutions. This report surveys divergences from OLS regression assumptions and which robust regression methods are best used to model these divergences.
+
+https://www.mathworks.com/help/econ/compare-robust-regression-techniques.html
+
+## Non-normal errors
+OLS regression assumes that errors are independent and identiticaly normally distributed. Normal iid errors is often a reasonable assumption given, ____ and if data is ______. However, empirical errors may show more extreme values than expected with a normal distribution. So-called fat-tailed distributions such as Student's t-distribution and the Cauchy distribution are symmetric distributions with greater probabilities assigned to extreme values.
+
+```{r echo=FALSE}
+#load libraries
+library(knitr)
+
+```
+
+```{r echo=FALSE}
+#Simulating data with a linear relationship and non-normal error distributions
+set.seed(15)
+sim = 100
+
+CI_norm = matrix(NA,nrow = 6, ncol = sim)
+CI_cauchy = matrix(NA,nrow = 6, ncol = sim)
+CI_t = matrix(NA,nrow = 6, ncol = sim)
+
+Pval_norm = matrix(NA,nrow = 6, ncol = sim)
+Pval_cauchy = matrix(NA,nrow = 6, ncol = sim)
+Pval_t = matrix(NA,nrow = 6, ncol = sim)
+
+Coefs = c(0,2,-5,3,0,0)
+
+for (j in 1:sim){
+  #Create simiulation data
+  x1 = rnorm(100,10,2)
+  x2 = rgamma(100,2,2)
+  x3 = rep(NA, 100)
+  x4 = rnorm(100,10,2)
+  x5 = rbinom(100,10, 0.1)
+  for (i in 1:100){
+    x3[i] = x1[i] + x2[i] + rnorm(1,0,10)
+  }
+  y1 = rep(NA,100)
+  y2 = rep(NA,100)
+  y3 = rep(NA,100)
+
+  for (i in 1:100){
+    y1[i] = 2*x1[i] + -5*x2[i] + 3*x3[i] + rnorm(1,0,1)
+    y2[i] = 2*x1[i] + -5*x2[i] + 3*x3[i] + rcauchy(1,0,2)
+    y3[i] = 2*x1[i] + -5*x2[i] + 3*x3[i] + rt(1,ncp=0,df=2)
+  }
+  #Store data
+  Non_normal_df = data.frame(x1,x2,x3,x4,x5,y1,y2,y3)
+  
+  #Model data
+  ols_norm = lm(y1 ~ x1 + x2 + x3 + x4 + x5)
+  ols_cauchy = lm(y2 ~ x1 + x2 + x3 + x4 + x5)
+  ols_t = lm(y3 ~ x1 + x2 + x3 + x4 + x5)
+  
+  #95% Confidence Intervals
+  ols_norm_CI = confint(ols_norm)
+  ols_cauchy_CI = confint(ols_cauchy)
+  ols_t_CI = confint(ols_t)
+
+  CI_norm[,j] = ols_norm_CI[,1] < Coefs & ols_norm_CI[,2] > Coefs
+  CI_cauchy[,j] = ols_cauchy_CI[,1] < Coefs & ols_cauchy_CI[,2] > Coefs
+  CI_t[,j] = ols_t_CI[,1] < Coefs & ols_t_CI[,2] > Coefs
+  
+  #P-values
+  Pval_norm[,j] = summary(ols_norm)$coefficients[,4] < 0.05
+  Pval_cauchy[,j] = summary(ols_cauchy)$coefficients[,4] < 0.05
+  Pval_t[,j] = summary(ols_t)$coefficients[,4] < 0.05
+}
+
+table1 = data.frame("Normal" = rowMeans(CI_norm), "Cauchy" = rowMeans(CI_cauchy), "t-dist" = rowMeans(CI_t))
+table2 = data.frame("Normal" = rowMeans(Pval_norm), "Cauchy" = rowMeans(Pval_cauchy), "t-dist" = rowMeans(Pval_t))
+rownames = c("Intercept", "x1","x2","x3","x4","x5")
+rownames(table1) = rownames
+rownames(table2) = rownames
+
+
+#knitr::kable(list(table1, table2))
+knitr::kable(table1, caption = "Percentage Capture of 95% CI")
+knitr::kable(table2, caption = "Percentage Capture of P-values < 0.05")
+```
+
+##Response Outliers
+Data may contain observations that, for various underlying reasons, have extreme values in the response variable. This may be due to data collection problems, measurement error, or represent some true data-generating process separate from the rest of the data. Outliers that arise from data collection or measurement error are rarely desriable and if at the extremes of the predictor space can cause poor parameter inference.
+
+https://www.mathworks.com/help/econ/compare-robust-regression-techniques.html#d119e40454
+https://stats.idre.ucla.edu/r/dae/robust-regression/
+
+```{r echo=FALSE}
+set.seed(15)
+sim = 100
+
+CI_norm = matrix(NA,nrow = 6, ncol = sim)
+CI_beg = matrix(NA,nrow = 6, ncol = sim)
+CI_middle = matrix(NA,nrow = 6, ncol = sim)
+CI_end = matrix(NA,nrow = 6, ncol = sim)
+
+Pval_norm = matrix(NA,nrow = 6, ncol = sim)
+Pval_beg = matrix(NA,nrow = 6, ncol = sim)
+Pval_middle = matrix(NA,nrow = 6, ncol = sim)
+Pval_end = matrix(NA,nrow = 6, ncol = sim)
+
+for (j in 1:sim){
+  #Create simiulation data
+  x1 = rnorm(100,10,2)
+  x2 = rgamma(100,2,2)
+  x3 = rep(NA, 100)
+  x4 = rnorm(100,10,2)
+  x5 = rbinom(100,10, 0.1)
+  for (i in 1:100){
+    x3[i] = x1[i] + x2[i] + rnorm(1,0,10)
+  }
+  #Generate percentile values for design matrix
+  perc_df = data.frame(x1,x2,x3,x4,x5)
+  percentile = function(x) trunc(rank(x))/length(x)
+  perc_df = data.frame(sapply(perc_df, percentile))
+  perc_df$percSums = percentile(rowSums(perc_df))
+  
+  y1 = rep(NA,100)
+  y2 = rep(NA,100)
+  y3 = rep(NA,100)
+  y4 = rep(NA,100)
+
+  for (i in 1:100){
+    y1[i]= 2*x1[i] + -5*x2[i] + 3*x3[i] + rnorm(1,0,1)
+  }
+  
+  y2 = y1
+  y3 = y1
+  y4 = y1
+  y2[perc_df$percSums <= .10] = y2[perc_df$percSums <= .10]*3
+  y3[perc_df$percSums >= .45 & perc_df$percSums <= .55] = y3[perc_df$percSums >= .45 & perc_df$percSums <= .55 ]*3
+  y4[perc_df$percSums >= .90] = y2[perc_df$percSums >= .90]*3
+
+  #Store data
+  Outliers_df = data.frame(x1,x2,x3,x4,x5,y1,y2,y3,y4)
+  
+  #Model data
+  ols_norm = lm(y1 ~ x1 + x2 + x3 + x4 + x5)
+  ols_beg= lm(y2 ~ x1 + x2 + x3 + x4 + x5)
+  ols_middle = lm(y3 ~ x1 + x2 + x3 + x4 + x5)
+  ols_end = lm(y4 ~ x1 + x2 + x3 + x4 + x5)
+  
+  #95% Confidence Intervals
+  ols_norm_CI = confint(ols_norm)
+  ols_beg_CI = confint(ols_beg)
+  ols_middle_CI = confint(ols_middle)
+  ols_end_CI = confint(ols_end)
+
+  CI_norm[,j] = ols_norm_CI[,1] < Coefs & ols_norm_CI[,2] > Coefs
+  CI_beg[,j] = ols_beg_CI[,1] < Coefs & ols_beg_CI[,2] > Coefs
+  CI_middle[,j] = ols_middle_CI[,1] < Coefs & ols_middle_CI[,2] > Coefs
+  CI_end[,j] = ols_end_CI[,1] < Coefs & ols_end_CI[,2] > Coefs
+
+  #P-values
+  Pval_norm[,j] = summary(ols_norm)$coefficients[,4] < 0.05
+  Pval_beg[,j] = summary(ols_beg)$coefficients[,4] < 0.05
+  Pval_middle[,j] = summary(ols_middle)$coefficients[,4] < 0.05
+  Pval_end[,j] = summary(ols_end)$coefficients[,4] < 0.05
+
+}
+
+table3 = data.frame("No Outliers" = rowMeans(CI_norm), 
+                    "Front Outliers" = rowMeans(CI_beg), 
+                    "Middle Outliers" = rowMeans(CI_middle),
+                    "End Outliers" = rowMeans(CI_end))
+
+table4 = data.frame("No Outliers" = rowMeans(Pval_norm), 
+                    "Front Outliers" = rowMeans(Pval_beg), 
+                    "Middle Outliers" = rowMeans(Pval_middle),
+                    "End Outliers" = rowMeans(Pval_end))
+rownames(table3) = rownames
+rownames(table4) = rownames
+knitr::kable(table3, caption = "Percentage Capture of 95% CI")
+knitr::kable(table4, caption = "Percentage Capture of P-values < 0.05")
+```
+
+## Influential Observations
+Influential observations are data points that would substantially change the model given their absence. An observations influence is function of the extremity of the data points covariate values and the residual for that data point. Influential observations can significantly change the estimated paramters of a regression model. Cook's distance and DFBETA are commonly used tests for influence. (Give brief mathematical description ). It's clear in figure XX below that even data generated from a linear model with normally distributed errors can contain natural points of high influence. We will again look at the confidence intervals and significance test for the estimates of the coefficients before and after adjusting for observations 73 and 66 to be of even greater influence.
+
+```{r echo = FALSE}
+library(car)
+Inf_Non_normal_df = Non_normal_df
+Inf_Non_normal_df[73,c("x1","x2","x3","x4","x5")] =  c(0,-2,-30,20,4)
+Inf_Non_normal_df[66,c("x1","x2","x3","x4","x5")] =  c(20,-2,45,15,4)
+
+lm.norm = lm(y1 ~ x1 + x2 + x3 + x4 + x5, data=Non_normal_df)
+lm.norm_Inf = lm(y1 ~ x1 + x2 + x3 + x4 + x5, data=Inf_Non_normal_df)
+
+par(mfrow=c(1,2))
+influenceOutput = influencePlot(lm.norm, main ="Fig. Influence Plot for \n Normal Error OLS Regression", cex.main = 0.8)
+influenceOutput_Inf = influencePlot(lm.norm_Inf, main ="Fig. Modified Influence Plot for\n Normal Error OLS Regression", cex.main = 0.8)
+```
+
+We observe that the OLS model still explains much of the overall variation in the data when fitting on the modified data with normal errors. However, it no longer shows the "x1" covariate as significant. In this case, 2% of the data being influential has caused us to lose a significant covariate. 
+
+```{r echo = FALSE}
+#Coefficient tables
+knitr::kable(round(summary(lm.norm)$coefficients,3), caption = "Coefficient Summary for OLS")
+knitr::kable(round(summary(lm.norm_Inf)$coefficients,3), caption = "Coefficient Summary for OLS (Modified Data)")
+
+#Model summary tables
+df = data.frame("Adj. R-squared" = c(summary(lm.norm)$adj.r.squared,summary(lm.norm_Inf)$adj.r.squared),
+           "F-statistic" = c(summary(lm.norm)$fstatistic[1],summary(lm.norm_Inf)$fstatistic[1]))
+
+rownames(df) = c("Normal Data", "Modified Data")
+knitr::kable(round(df,3), caption = "OLS Model R-squared and F-statistic (df = 5, 94)")
+```
+
+
+## Heteroskedasicity
+
+Data that shows non-constant variance over the error term means our OLS estimates are no longer the most optimal estimates of the coefficients. OLS will still give us unbiased point estimates of the coefficients, however, the standard errors, confidence intervals, and significance tests maybe be severly biased and unnecessarily conservative. In the simulated data below, the variance of the errors in linearly related to the the scale of the predictors. The error of the data becomes more disperse as we move toward higher multidimensional values in the covariate domain. Heteroskedasticy often occurs when the error of model increase with time as a system becomes more complex, or the error is linked to the scale of one of the covariates.
+
+```{r echo = FALSE, warning=FALSE}
+#Simulating data with a linear relationship and non-normal error distributions
+set.seed(15)
+sim = 100
+
+CI_het1 = matrix(NA,nrow = 6, ncol = sim)
+CI_het2 = matrix(NA,nrow = 6, ncol = sim)
+CI_het3 = matrix(NA,nrow = 6, ncol = sim)
+
+Pval_het1 = matrix(NA,nrow = 6, ncol = sim)
+Pval_het2 = matrix(NA,nrow = 6, ncol = sim)
+Pval_het3 = matrix(NA,nrow = 6, ncol = sim)
+
+Coefs = c(0,2,-5,3,0,0)
+
+for (j in 1:sim){
+  #Create simiulation data
+  x1 = rnorm(100,10,2)
+  x2 = rgamma(100,2,2)
+  x3 = rep(NA, 100)
+  x4 = rnorm(100,10,2)
+  x5 = rbinom(100,10, 0.1)
+  for (i in 1:100){
+    x3[i] = x1[i] + x2[i] + rnorm(1,0,10)
+  }
+  
+  y1 = rep(NA,100)
+  y2 = rep(NA,100)
+  y3 = rep(NA,100)
+  
+  for (i in 1:100){
+    e1 = rnorm(1,0,abs((x1[i]+x2[i]+x3[i]+x4[i]+x5[i])^(1/2)))
+    e2 = rnorm(1,0,abs((x1[i]+x2[i]+x3[i]+x4[i]+x5[i])))
+    e3 = rnorm(1,0,abs(x1[i]+x2[i]+x3[i]+x4[i]+x5[i])^(3/2))
+        
+    y1[i] = 2*x1[i] + -5*x2[i] + 3*x3[i] + e1
+    y2[i] = 2*x1[i] + -5*x2[i] + 3*x3[i] + e2
+    y3[i] = 2*x1[i] + -5*x2[i] + 3*x3[i] + e3
+  }
+  #Store data
+  Hetero_df = data.frame(x1,x2,x3,x4,x5,y1,y2,y3)
+  
+  #Model data
+  ols_het1 = lm(y1 ~ x1 + x2 + x3 + x4 + x5)
+  ols_het2 = lm(y2 ~ x1 + x2 + x3 + x4 + x5)
+  ols_het3 = lm(y3 ~ x1 + x2 + x3 + x4 + x5)
+  
+  #95% Confidence Intervals
+  ols_het1_CI = confint(ols_het1)
+  ols_het2_CI = confint(ols_het2)
+  ols_het3_CI = confint(ols_het3)
+
+  CI_het1[,j] = ols_het1_CI[,1] < Coefs & ols_het1_CI[,2] > Coefs
+  CI_het2[,j] = ols_het2_CI[,1] < Coefs & ols_het2_CI[,2] > Coefs
+  CI_het3[,j] = ols_het3_CI[,1] < Coefs & ols_het3_CI[,2] > Coefs
+  
+  #P-values
+  Pval_het1[,j] = summary(ols_het1)$coefficients[,4] < 0.05
+  Pval_het2[,j] = summary(ols_het2)$coefficients[,4] < 0.05
+  Pval_het3[,j] = summary(ols_het3)$coefficients[,4] < 0.05
+}
+
+table1 = data.frame("Hetero 1" = rowMeans(CI_het1), "Hetero 2" = rowMeans(CI_het2), "Hetero 3" = rowMeans(CI_het3))
+table2 = data.frame("Hetero 1" = rowMeans(Pval_het1), "Hetero 2" = rowMeans(Pval_het2), "Hetero 3" = rowMeans(Pval_het3))
+rownames = c("Intercept", "x1","x2","x3","x4","x5")
+rownames(table1) = rownames
+rownames(table2) = rownames
+
+#Heteroskedasticity Plots
+par(mfrow = c(1,3))
+plot(ols_het1)[1]
+plot(ols_het2)[1]
+plot(ols_het3)[1]
+
+#knitr::kable(list(table1, table2))
+knitr::kable(table1, caption = "Percentage Capture of 95% CI")
+knitr::kable(table2, caption = "Percentage Capture of P-values < 0.05")
+```
+
+## Robust Regression Models
+
+Several modeifications and alternative models have been developed to correct failures in the OLS model assumptions. 
+
+
+### Least Absolute Deviations Regression 
+
+Least absolute deviations regression (LAD) finds the coefficient estimates that minimize the absolute value of the difference between the specified model and the responses. In this model we simply replace the squared objective function of OLS with the absolute value function.
+$$\operatorname*{arg\,min}_\theta \Sigma_{i=1}^n |y - X^{t}\beta|$$
+
+
+Distributionally, the errors of the model are charaterized by the Laplace distribution, which has fatter tails compared to the Normal distribution. The importance of resdiuals in the LAD model does not scale with the size of the residual. In contrast, larger residuals have a greater impact on the estimates of the model as they scale quadratically. One key drawback of LAD is that data points that are symmetrical about the horizontal axis can cause the estimates to be unstables. In fact, there maybe infinitely many solutions in the given scenario. *how to know when unstable?*
+
+```{r echo=FALSE}
+library(L1pack)
+
+lad = l1fit(Non_normal_df[,1:5],Non_normal_df$y3, intercept=TRUE)
+lad$coefficients
+```
+
+Comparison
+http://article.sapub.org/10.5923.j.statistics.20150503.02.html#Sec3
+
+
+https://stats.stackexchange.com/questions/277823/least-absolute-deviation-regressions-coefficient-significance-levels?utm_medium=organic&utm_source=google_rich_qa&utm_campaign=google_rich_qa
+**There's not actually a t-test, because the estimate divided by its standard error doesn't have a t-distribution. Similar for an F-test.
+Being an MLE, there would be an asymptotic z-test, or an asymptotic chi-square test.
+[There's the possibility of using some resampling-based tests as well, permutation tests or bootstrapping. You could also use L1pack's ability to simulate from L1 models to do a parametric bootstrap.]
+
+
+ +Iteratively reweighted least squares (MASS)
+
+
+
++ Least trimmed squares (robustbase)
++ M regression(robustreg) (maybe not because old)
++ fast-S algorithms and heteroscedasticity and autocorrelation corrected erros (robustbase)
++ MM-estimation (MASS)
++ (quantreg)
++ median-based Theil-Sen (mblm)
++ Robust Bayesian
+
+## Comparison of Robust Regression Models
+
+Using the simulated data set for each departure from the OLS assumptions, we compare the performance of these robust regression models for each scenario. The final comparison is a dataset that combines each of these scenarios.
+
+2) Compare regression model performance in the four data cases 1) non-normal errors, 2) reponse outliers, 3) influential points 4) and heteroskedasticty
+
+3) Combine data issues into one data set and compare all models again
