@@ -11,17 +11,18 @@ https://cran.r-project.org/web/views/Robust.html
 Common regression methods such as ordinary least squares (OLS) make strong assumptions about the the behavior of errors. Such methods often assume errors have constant variance (homoskedasticity), no autocorrelation, and normality. This is expected given the parametric forumlation of OLS regression $Y \overset{iid}{\sim} N(X^T\beta, \sigma_{\epsilon}^2)$. Commonly outliers and influential observations cand drasticaly lower the optimality of OLS regression. Divergence from these modelling assumptions is not rare and making OLS regression sensitive to response variable outliers, high leverage points, heteroskedastic errors, and autocorrelation.
 
 ## Approach
-Robust regression methods have been developed to overcome these challenges through parametric and non-parametric solutions. This report surveys divergences from OLS regression assumptions and which robust regression methods are best used to model these divergences.
+Robust regression methods have been developed to overcome these challenges through parametric and non-parametric solutions. This report surveys divergences from OLS regression assumptions and which robust regression methods are best used to model these divergences for both inference and prediction.
 
 https://www.mathworks.com/help/econ/compare-robust-regression-techniques.html
 
 ## Non-normal errors
 OLS regression assumes that errors are independent and identiticaly normally distributed. Normal iid errors is often a reasonable assumption given, ____ and if data is ______. However, empirical errors may show more extreme values than expected with a normal distribution. So-called fat-tailed distributions such as Student's t-distribution and the Cauchy distribution are symmetric distributions with greater probabilities assigned to extreme values.
 
-```{r echo=FALSE}
+```{r echo=FALSE, message=FALSE}
 #load libraries
 library(knitr)
-
+library(boot)
+library(caret)
 ```
 
 ```{r echo=FALSE}
@@ -91,6 +92,17 @@ rownames(table2) = rownames
 #knitr::kable(list(table1, table2))
 knitr::kable(table1, caption = "Percentage Capture of 95% CI")
 knitr::kable(table2, caption = "Percentage Capture of P-values < 0.05")
+
+#Prediction
+norm_CvMse = cv.glm(data = Non_normal_df, 
+                   glmfit = glm(y1 ~ x1 + x2 + x3 + x4 + x5, data = Non_normal_df))$delta[1]
+cauchy_CvMse = cv.glm(data = Non_normal_df, 
+                   glmfit = glm(y2 ~ x1 + x2 + x3 + x4 + x5, data = Non_normal_df))$delta[1]
+t_CvMse = cv.glm(data = Non_normal_df, 
+                   glmfit = glm(y3 ~ x1 + x2 + x3 + x4 + x5, data = Non_normal_df))$delta[1]
+table3 = data.frame("Normal" = norm_CvMse, "Cauchy" = cauchy_CvMse, "t-dist" = t_CvMse)
+rownames(table3) = c("CV MSE")
+knitr::kable(round(table3,2), caption = "LOOCV Prediction MSE (Non-Normality)")
 ```
 
 ##Response Outliers
@@ -173,25 +185,41 @@ for (j in 1:sim){
 
 }
 
-table3 = data.frame("No Outliers" = rowMeans(CI_norm), 
+table4 = data.frame("No Outliers" = rowMeans(CI_norm), 
                     "Front Outliers" = rowMeans(CI_beg), 
                     "Middle Outliers" = rowMeans(CI_middle),
                     "End Outliers" = rowMeans(CI_end))
 
-table4 = data.frame("No Outliers" = rowMeans(Pval_norm), 
+table5 = data.frame("No Outliers" = rowMeans(Pval_norm), 
                     "Front Outliers" = rowMeans(Pval_beg), 
                     "Middle Outliers" = rowMeans(Pval_middle),
                     "End Outliers" = rowMeans(Pval_end))
-rownames(table3) = rownames
 rownames(table4) = rownames
-knitr::kable(table3, caption = "Percentage Capture of 95% CI")
-knitr::kable(table4, caption = "Percentage Capture of P-values < 0.05")
+rownames(table5) = rownames
+knitr::kable(table4, caption = "Percentage Capture of 95% CI")
+knitr::kable(table5, caption = "Percentage Capture of P-values < 0.05")
+
+#Prediction
+no_CvMse = cv.glm(data = Outliers_df, 
+                   glmfit = glm(y1 ~ x1 + x2 + x3 + x4 + x5, data = Outliers_df))$delta[1]
+beg_CvMse = cv.glm(data = Outliers_df, 
+                   glmfit = glm(y2 ~ x1 + x2 + x3 + x4 + x5, data = Outliers_df))$delta[1]
+middle_CvMse = cv.glm(data = Outliers_df, 
+                   glmfit = glm(y3 ~ x1 + x2 + x3 + x4 + x5, data = Outliers_df))$delta[1]
+end_CvMse = cv.glm(data = Outliers_df, 
+                   glmfit = glm(y4 ~ x1 + x2 + x3 + x4 + x5, data = Outliers_df))$delta[1]
+table6 = data.frame("No Outliers" = no_CvMse,
+                    "Front Outliers" = beg_CvMse, 
+                    "Middle Outliers" = middle_CvMse, 
+                    "End Outliers" = end_CvMse)
+rownames(table6) = c("CV MSE")
+knitr::kable(round(table6,2), caption = "LOOCV Prediction MSE (Outliers)")
 ```
 
 ## Influential Observations
-Influential observations are data points that would substantially change the model given their absence. An observations influence is function of the extremity of the data points covariate values and the residual for that data point. Influential observations can significantly change the estimated paramters of a regression model. Cook's distance and DFBETA are commonly used tests for influence. (Give brief mathematical description ). It's clear in figure XX below that even data generated from a linear model with normally distributed errors can contain natural points of high influence. We will again look at the confidence intervals and significance test for the estimates of the coefficients before and after adjusting for observations 73 and 66 to be of even greater influence.
+Influential observations are data points that would substantially change the model given their absence. An observations influence is function of the extremity of the data points covariate values and the residual for that data point. Influential observations can significantly change the estimated paramters of a regression model. Cook's distance and DFBETA are commonly used tests for influence. (Give brief mathematical description ). It's clear in figure XX below that even data generated from a linear model with normally distributed errors can contain natural points of high influence. We will again look at the confidence intervals and significance tests for the estimates of the coefficients before and after adjusting for observations 73 and 66 to be of even greater influence.
 
-```{r echo = FALSE}
+```{r echo = FALSE, message=FALSE}
 library(car)
 Inf_Non_normal_df = Non_normal_df
 Inf_Non_normal_df[73,c("x1","x2","x3","x4","x5")] =  c(0,-2,-30,20,4)
@@ -205,7 +233,7 @@ influenceOutput = influencePlot(lm.norm, main ="Fig. Influence Plot for \n Norma
 influenceOutput_Inf = influencePlot(lm.norm_Inf, main ="Fig. Modified Influence Plot for\n Normal Error OLS Regression", cex.main = 0.8)
 ```
 
-We observe that the OLS model still explains much of the overall variation in the data when fitting on the modified data with normal errors. However, it no longer shows the "x1" covariate as significant. In this case, 2% of the data being influential has caused us to lose a significant covariate. 
+We observe that the OLS model still explains much of the overall variation in the data when fitting on the modified data with influential points. However, it no longer shows the "x1" covariate as significant. In this case, 2% of the data being influential has caused us to lose a significant covariate. 
 
 ```{r echo = FALSE}
 #Coefficient tables
@@ -218,12 +246,23 @@ df = data.frame("Adj. R-squared" = c(summary(lm.norm)$adj.r.squared,summary(lm.n
 
 rownames(df) = c("Normal Data", "Modified Data")
 knitr::kable(round(df,3), caption = "OLS Model R-squared and F-statistic (df = 5, 94)")
+
+#Prediction
+infl_No_CvMse = cv.glm(data =Non_normal_df, 
+                   glmfit = glm(y1 ~ x1 + x2 + x3 + x4 + x5, data = Non_normal_df))$delta[1]
+infl_Yes_CvMse = cv.glm(data = Inf_Non_normal_df, 
+                   glmfit = glm(y1 ~ x1 + x2 + x3 + x4 + x5, data = Inf_Non_normal_df))$delta[1]
+
+table7 = data.frame("Normal Data" = infl_No_CvMse,
+                    "Modified Data" = infl_Yes_CvMse)
+rownames(table7) = c("CV MSE")
+knitr::kable(round(table7,2), caption = "LOOCV Prediction MSE (Influence)")
 ```
 
 
 ## Heteroskedasicity
 
-Data that shows non-constant variance over the error term means our OLS estimates are no longer the most optimal estimates of the coefficients. OLS will still give us unbiased point estimates of the coefficients, however, the standard errors, confidence intervals, and significance tests maybe be severly biased and unnecessarily conservative. In the simulated data below, the variance of the errors in linearly related to the the scale of the predictors. The error of the data becomes more disperse as we move toward higher multidimensional values in the covariate domain. Heteroskedasticy often occurs when the error of model increase with time as a system becomes more complex, or the error is linked to the scale of one of the covariates.
+Data that shows non-constant variance over the error term means our OLS estimates are no longer the most optimal estimates of the coefficients. OLS will still give us unbiased point estimates of the coefficients, however, the standard errors, confidence intervals, and significance tests maybe be severly biased and unnecessarily conservative. In the simulated data below, the variance of the errors are linearly related to the the scale of the predictors. The error of the data becomes more disperse as we move toward higher multidimensional values in the covariate domain. Heteroskedasticy often occurs when the error of model increase with time as a system becomes more complex, or the error is linked to the scale of one of the covariates.
 
 ```{r echo = FALSE, warning=FALSE}
 #Simulating data with a linear relationship and non-normal error distributions
@@ -302,11 +341,27 @@ plot(ols_het3)[1]
 #knitr::kable(list(table1, table2))
 knitr::kable(table1, caption = "Percentage Capture of 95% CI")
 knitr::kable(table2, caption = "Percentage Capture of P-values < 0.05")
+
+#Prediction
+no_CvMse = cv.glm(data = Non_normal_df, 
+                   glmfit = glm(y1 ~ x1 + x2 + x3 + x4 + x5, data = Non_normal_df))$delta[1]
+het1_CvMse = cv.glm(data = Hetero_df, 
+                   glmfit = glm(y1 ~ x1 + x2 + x3 + x4 + x5, data = Hetero_df))$delta[1]
+het2_CvMse = cv.glm(data = Hetero_df, 
+                   glmfit = glm(y2 ~ x1 + x2 + x3 + x4 + x5, data = Hetero_df))$delta[1]
+het3_CvMse = cv.glm(data = Hetero_df, 
+                   glmfit = glm(y3 ~ x1 + x2 + x3 + x4 + x5, data = Hetero_df))$delta[1]
+table7 = data.frame("No Hetero" = no_CvMse,
+                    "Hetero 1" = beg_CvMse, 
+                    "Hetero 2" = middle_CvMse, 
+                    "Hetero 3" = end_CvMse)
+rownames(table7) = c("CV MSE")
+knitr::kable(round(table7,2), caption = "LOOCV Prediction MSE (Heteroskedasticity)")
 ```
 
 ## Robust Regression Models
 
-Several modeifications and alternative models have been developed to correct failures in the OLS model assumptions. 
+Several modifications and alternative models have been developed to correct failures in the OLS model assumptions. The following sections gives a brief overview of each method.
 
 
 ### Least Absolute Deviations Regression 
@@ -315,7 +370,7 @@ Least absolute deviations regression (LAD) finds the coefficient estimates that 
 $$\operatorname*{arg\,min}_\theta \Sigma_{i=1}^n |y - X^{t}\beta|$$
 
 
-Distributionally, the errors of the model are charaterized by the Laplace distribution, which has fatter tails compared to the Normal distribution. The importance of resdiuals in the LAD model does not scale with the size of the residual. In contrast, larger residuals have a greater impact on the estimates of the model as they scale quadratically. One key drawback of LAD is that data points that are symmetrical about the horizontal axis can cause the estimates to be unstables. In fact, there maybe infinitely many solutions in the given scenario. *how to know when unstable?*
+Distributionally, the errors of the model are charaterized by the Laplace distribution, which has fatter tails compared to the normal distribution. The importance of resdiuals in the LAD model does not scale with the size of the residual. In contrast, larger residuals have a greater impact on the estimates of the model as they scale quadratically. One key drawback of LAD is that data points that are symmetrical about the horizontal axis can cause the estimates to be unstables. In fact, there maybe infinitely many solutions in the given scenario. *how to know when unstable?*
 
 ```{r echo=FALSE}
 library(L1pack)
@@ -348,8 +403,18 @@ Being an MLE, there would be an asymptotic z-test, or an asymptotic chi-square t
 
 ## Comparison of Robust Regression Models
 
+
 Using the simulated data set for each departure from the OLS assumptions, we compare the performance of these robust regression models for each scenario. The final comparison is a dataset that combines each of these scenarios.
 
-2) Compare regression model performance in the four data cases 1) non-normal errors, 2) reponse outliers, 3) influential points 4) and heteroskedasticty
+2) Compare regression model performance in the four data cases 1) non-normal errors, 2) reponse outliers, 3) influential points 4) and heteroskedasticty. Use a big table to calculate LOOCV MSE for each methods across the different scenarios. Figure out which methods can be used for inference.
+
+### Inference
+**Table of 95% CI and p-value coverage for methods that allow for inference**
+
+
+### Prediction
+**BIG TABLE**
+**SUMMARY TEXT**
 
 3) Combine data issues into one data set and compare all models again
+**Maybe not**
