@@ -8,13 +8,53 @@ output: pdf_document
 ## Problem
 https://www3.nd.edu/~rwilliam/stats2/l25.pdf
 
-Many statistical models assume constant variance of the error term when modeling a response variable against predictors. Heteroskedasticity breaks this assumption and can present unique challenges to inference and prediction. Heteroskedasticity occurs when the conditional variance of the response $Y$ given the predictors $X$ is also a function of $t$ time or some vairable that has an ordered scale. In other words, the variance of the error term may change over time or with an ordered variable. Examples include increasing variation of measurement error of consumption habits with income (more money to buy various goods) and greater error variance of capital expenditures based on company size.
+Many statistical models assume constant variance of the error term when modeling a response variable against predictors $\sigma^2_1 = \sigma^2_2 = \sigma^2_3,..., = \sigma^2$. Heteroskedasticity breaks this assumption and can present unique challenges to inference and prediction. Heteroskedasticity occurs when the conditional variance of the response $Y$ given the predictors $X$ is also a function of $t$ time or some vairable that has an ordered scale. In other words, the variance of the error term may change over time or with an ordered variable. Examples include increasing variation of measurement error of consumption habits with income (more money to buy various goods) and the prediction error of a model that learns over time.
 
 ## Approach
 
 We simulate five datasets where $n=300$, $p=1,2,10,100,250$ and where the error term of the model is a linear function of one covariate in each dataset. We then simulate four more datasets where $n=300$ and $p=2,10,100,250$ and half of the covariates are modestly correlated with each other ($0.2 \leq \rho \leq 0.5$) but not including the covariate that is driving the heteroskedasticity, except for in the $p=2$ case. These four datasets will help demonstrate the effect of multicollinearity on detection and modelling of heterskedastic data.
 
-A survey of exploratory data analysis methods and test statistics available in R is given to show how heteroskedasticity can be detected in low- and high-dimensional data and the effect of multicollinearity on detection. A comparison of _____ regression models is given to highlight advantages and disadvantages to different approaches. 
+A survey of exploratory data analysis methods and test statistics available in R is given to show how heteroskedasticity can be detected in low- and high-dimensional data and the effect of multicollinearity on detection. A comparison of _____ regression models is given to highlight advantages and disadvantages to different approaches.
+
+```{r}
+###data generating function (no multicollinearity)
+dataGen = function(b, n, p, a, h ){
+  mu = sample(-10:10, size = p, replace = TRUE)
+  sigma = diag(1,p)
+  X = mvrnorm(n,mu,sigma, empirical = TRUE)
+  t = sort(X[,1])
+  y = rep(NA,n)
+
+  for (i in 1:n){
+    sigma = abs(h*t[i])
+    y[i] = a + b[1]*t[i] + b[2:(p/2+1)]%*%X[i,2:(p/2+1)] + rnorm(1,0,sigma)
+    
+  }
+  matrix(data = c(y,t,X[,2:p]), nrow = n, ncol = p+1)
+}
+
+###data generating function (with multicollinearity)
+dataGenMC = function(b, n, p, a, h, cor = 20){
+  mu = sample(-10:10, size = p, replace = TRUE)
+  sigma = diag(1,p)
+  cors = sample(1:cor, size = p/2, replace = TRUE)*.01
+  sigma[2:as.integer(p/2),(p/2+1):p] = cors
+  sigma[(p/2+1):p,2:as.integer(p/2)] = t(sigma[2:as.integer(p/2),(p/2+1):p])
+  sigma = t(sigma)%*%sigma
+  X = mvrnorm(n,mu,sigma, empirical = TRUE)
+  t = sort(X[,1])
+  y = rep(NA,n)
+
+  for (i in 1:n){
+    sigma = abs(h*t[i])
+    y[i] = a + b[1]*t[i] + b[2:(p/2+1)]%*%X[i,2:(p/2+1)] + rnorm(1,0,sigma)
+    
+  }
+  matrix(data = c(y,t,X[,2:p]), nrow = n, ncol = p+1)
+}
+```
+
+
 
 ```{r echo = FALSE, message=FALSE}
 ###creating simulated data with no collinearity
@@ -240,6 +280,11 @@ Disadvantages
 
 
 ```{r echo = FALSE, message = FALSE}
+
+#works
+data = dataGenMC(b = betas, n = 300, p = 20, a=10, h =5, cor = 20)
+round(GQ.function(lm = lm(data[,1] ~ data[,-1]), time = data[,2], X = data[,-c(1,2)]),3)
+
 #Goldfeld-Quandt test
 library(lmtest)
 
@@ -382,21 +427,32 @@ Disadvantages
 
 *Breusch-Pagan test*
 
+The intution behind the Breusch-Pagan test is to determine if any of the predictors in the specified model have linear relationship with the model variance $\sigma^2$. The squared residuals of the specified model $\epsilon^2$ are use as an estimate of the model variance and regressed against the model predictors. The $R^2$ of the variance function is used to calculate the test statistic $nR^2 \sim \chi^2_{S-1}$ where $n$ is the number of observations in the model and $S$ is the number of predictors.
 
 An extension of the Breusch-Pagan test is the White test that extends the linear model to include interaction and quadratic transformations of the currtent model covariates, thus a more generalized approach to detect heteroskedasticty that is not a linear function of the covariates. However, when $n$ is near $p$ in size, as often the case in high-dimensions, the White test proves problematic when adding additional predictors to the model and $p > n$. 
 
-http://www.jstor.org.proxy.lib.duke.edu/stable/pdf/2988471.pdf?refreqid=excelsior:40ccf64937d1b684ec45d40dc0c9d3fa
+Advantages
 
-https://rpubs.com/cyobero/187387
+- Intutitive test statistic
+- Can handle $p \approx n$ cases
+- Detection of non-linear and interaction heterskedasticity with White test extension
+
+Disadvantages
+- Assumes normality of variance function dispersion (there is a Studentized version by Koenker)
+- May be significant when the true issue is improper model specification.
 
 
 ## Corrective Data Transformations
 
+### Logarithmic Transformation
+
+### Box-Cox Power Transformation
 
 
 ## Statistical Modeling
 
-In the linear regression setting, the maximum likelihood estimates of the coefficients remain unbiased in the presence of heteroskedasticity, however the standard error estimates are not which can effect whether a explanatory predictor is found to be significant. We see below that even with modest heterskedasticity our coefficient estimate and significance test for the time variable reflect the true model. However, when we increase the dimension of our data by one variable $p=2$, we no longer have an accurate coefficient estimate for the additional variable and the only significant variable is time. When we further increase the dimensions of the data to $p=10$ we lose two more signficant predictors.
+### Statistical Significance of Predictor Variables
+In the linear regression setting, the maximum likelihood estimates of the coefficients remain unbiased in the presence of heteroskedasticity, however the standard error estimates do not which. can effect whether a explanatory predictor is found to be significant. We see below that even with modest heterskedasticity our coefficient estimate and significance test for the time variable reflect the true model. However, when we increase the dimension of our data by one variable $p=2$, we no longer have an accurate coefficient estimate for the additional variable and the only significant variable is time. When we further increase the dimensions of the data to $p=10$ we lose two more signficant predictors.
 ```{r}
 #summary
 #stargazer::stargazer(lm_p1.fit)
