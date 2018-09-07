@@ -8,7 +8,7 @@ output: pdf_document
 ## Problem
 https://www3.nd.edu/~rwilliam/stats2/l25.pdf
 
-Many statistical models assume constant variance of the error term when modeling a response variable against predictors $\sigma^2_1 = \sigma^2_2 = \sigma^2_3,..., = \sigma^2$. Heteroskedasticity breaks this assumption and can present unique challenges to inference and prediction. Heteroskedasticity occurs when the conditional variance of the response $Y$ given the predictors $X$ is also a function of $t$ time or some vairable that has an ordered scale. In other words, the variance of the error term may change over time or with an ordered variable. Examples include increasing variation of measurement error of consumption habits with income (more money to buy various goods) and the prediction error of a model that learns over time.
+Many statistical models assume constant variance of the error term when modeling a response variable against predictors $\sigma^2_1 = \sigma^2_2 = \sigma^2_3,..., = \sigma^2$. Heteroskedasticity breaks this assumption and can present unique challenges to inference and prediction. Heteroskedasticity occurs when the conditional variance of the response $Y_{n \times 1} $ given the predictors $X_{n \times p}$ is also a function of $t$ time or some vairable $X_j$ that has an ordered scale. In other words, the variance of the error term may change over time or with an ordered variable. Examples include increasing variation of consumption habits with income (more money to buy various goods) and the prediction error of a model that learns over time.
 
 ## Approach
 
@@ -16,7 +16,13 @@ We simulate five datasets where $n=300$, $p=1,2,10,100,250$ and where the error 
 
 A survey of exploratory data analysis methods and test statistics available in R is given to show how heteroskedasticity can be detected in low- and high-dimensional data and the effect of multicollinearity on detection. A comparison of _____ regression models is given to highlight advantages and disadvantages to different approaches.
 
-```{r}
+```{r echo = FALSE, message=FALSE}
+#load libraries
+library(MASS)
+library(rmutil)
+library(plotly)
+library(lmtest)
+
 ###data generating function (no multicollinearity)
 dataGen = function(b, n, p, a, h ){
   mu = sample(-10:10, size = p, replace = TRUE)
@@ -30,7 +36,7 @@ dataGen = function(b, n, p, a, h ){
     y[i] = a + b[1]*t[i] + b[2:(p/2+1)]%*%X[i,2:(p/2+1)] + rnorm(1,0,sigma)
     
   }
-  matrix(data = c(y,t,X[,2:p]), nrow = n, ncol = p+1)
+  as.data.frame(matrix(data = c(y,t,X[,2:p]), nrow = n, ncol = p+1))
 }
 
 ###data generating function (with multicollinearity)
@@ -50,23 +56,20 @@ dataGenMC = function(b, n, p, a, h, cor = 20){
     y[i] = a + b[1]*t[i] + b[2:(p/2+1)]%*%X[i,2:(p/2+1)] + rnorm(1,0,sigma)
     
   }
-  matrix(data = c(y,t,X[,2:p]), nrow = n, ncol = p+1)
+  as.data.frame(matrix(data = c(y,t,X[,2:p]), nrow = n, ncol = p+1))
 }
 ```
 
 
 
-```{r echo = FALSE, message=FALSE}
-###creating simulated data with no collinearity
-#load libraries
-library(MASS)
-library(rmutil)
-library(plotly)
-
+```{r}
 #Randomly sample 250 true beta coefficients
 set.seed(1)
 betas = sample(-10:10, size = 250, replace = TRUE)
+```
 
+
+```{r}
 #Generate simulated heteroskedastic data with n = 300 p=1
 set.seed(130)
 time = seq(1,300,1)
@@ -215,10 +218,16 @@ for (i in 1:300){
 When using only one predictor to model the response, we can directly observe the behavior of the response variable along the scale of the predictor. We simulate a simple low dimensional dataset ($n=300, p=1$), specified as $Y \sim N(\mu, \sigma^2)$ where $\mu = 10 + time*\beta$, $\beta=2$, $\sigma^2 = 1.5*time$ where the error term is indexed by a multiple of time. Notice that the dispersion of the $Y$ response increase with time.
 
 ```{r echo = FALSE, message=FALSE}
-#load libraries
-library(MASS)
-library(rmutil)
-library(plotly)
+#Generate simulated heteroskedastic data with n = 300 p=1
+set.seed(130)
+time = seq(1,300,1)
+y_1 = rep(NA,300)
+
+for (i in 1:300){
+  sigma = 5*time[i]
+  y_1[i] = 10 + betas[1]*time[i] + rnorm(1,0,sigma)
+  
+}
 
 #plot p = 1 heteroskedastic data
 plot(time,y_1, main = "Fig.1 Heteroskedastic Data p=1",
@@ -228,12 +237,18 @@ plot(time,y_1, main = "Fig.1 Heteroskedastic Data p=1",
 For multiple regression, rather than looking at several different plots of each variable against the response, residuals plots can be used to detect non-constant variance of the error term. If we oberve that the the variance of the residuals is increasing along the scale of the fitted values, this is a good indication that heterskedasticity is present in the data. We see that as $p \to n$ it is harder to visually detect heteroskedasticty. In addition, when there is even modest multicollinearity among the covariates ($p < 0.05*n$), visual detection using residual plots becomes nearly impossible.
 
 ```{r echo = FALSE}
+set.seed(1)
+d2 = dataGen(b = betas, n = 300, p = 2, a = 10, h = 5)
+d10 = dataGen(b = betas, n = 300, p = 10, a = 10, h = 5)
+d100 = dataGen(b = betas, n = 300, p = 100, a = 10, h = 5)
+d250 = dataGen(b = betas, n = 300, p = 250, a = 10, h = 5)
+
 #plot p = 2,10,100,250 heteroskedastic data and no multicollinearity
 lm_1 = lm(y_1 ~ time)
-lm_2 = lm(y_2 ~ time + X_2)
-lm_10 = lm(y_10 ~ time + X_10)
-lm_100 = lm(y_100 ~ time + X_100)
-lm_250 = lm(y_100 ~ time + X_250)
+lm_2 = lm(d2$V1 ~ ., data = d2)
+lm_10 = lm(d10$V1 ~ ., data = d10)
+lm_100 = lm(d100$V1 ~ ., data = d100)
+lm_250 = lm(d250$V1 ~ ., data = d250)
 
 par(mfrow=c(2,2))
 plot(lm_2, which=c(1,1), caption ="p = 2")
@@ -241,11 +256,16 @@ plot(lm_10, which=c(1,1),caption ="p = 10")
 plot(lm_100, which=c(1,1), caption ="p = 100")
 plot(lm_250, which=c(1,1), caption ="p = 250")
 
-#plot p = 10,100,250 heteroskedastic data and multicollinearity
-lm_2mc = lm(y_2mc ~ X_2mc)
-lm_10mc = lm(y_10mc ~ X_10mc)
-lm_100mc = lm(y_100mc ~ X_100mc)
-lm_250mc = lm(y_250mc ~ X_250mc)
+#plot p = 2,10,100,250 heteroskedastic data and multicollinearity
+dMC2 = dataGenMC(b = betas, n = 300, p = 2, a = 10, h = 5, cor = 20)
+dMC10 = dataGenMC(b = betas, n = 300, p = 10, a = 10, h = 5, cor = 20)
+dMC100 = dataGenMC(b = betas, n = 300, p = 100, a = 10, h = 5, cor = 20)
+dMC250 = dataGenMC(b = betas, n = 300, p = 250, a = 10, h = 5, cor = 20)
+
+lm_2mc = lm(dMC2$V1 ~ . , data = dMC2)
+lm_10mc = lm(dMC10$V1 ~ . , data = dMC10)
+lm_100mc = lm(dMC100$V1 ~ . , data = dMC100)
+lm_250mc = lm(dMC250$V1 ~ . , data = dMC250)
 
 par(mfrow=c(2,2))
 plot(lm_2mc, which=c(1,1), caption ="p = 2 with multicollinearity")
@@ -280,21 +300,61 @@ Disadvantages
 
 
 ```{r echo = FALSE, message = FALSE}
-
-#works
-data = dataGenMC(b = betas, n = 300, p = 20, a=10, h =5, cor = 20)
-round(GQ.function(lm = lm(data[,1] ~ data[,-1]), time = data[,2], X = data[,-c(1,2)]),3)
-
-#Goldfeld-Quandt test
-library(lmtest)
-
 #GQ test function
+GQ.function = function(lm , data){
+                              p = dim(data[,-1])[2]
+                              GQ.test = rep(NA, p)
+                              for (i in 2:(p+1)){
+                                
+                                p_value = try(gqtest(lm, order.by = data[,i], alternative = "two.sided")[[5]])
+                                if("try-error" %in% class(t)){
+                                  GQ.test[i-1] = NA
+                                }
+                                
+                                 else{
+                                   GQ.test[i-1] = p_value
+                                 }
+                              }
+                      GQ.test
+}
+
+
+#Goldfeld-Quandt simulation function
+GQ.sim = function(n, p, sims){
+  set.seed(2)
+  tpr = matrix(NA, nrow = p, ncol = sims)
+  fpr = matrix(NA, nrow = p, ncol = sims)
+  for(i in 1:sims){
+    for(j in 1:p){
+      data = dataGen(b = betas, n = n, p = p, a=10, h =5)
+      lm = lm(data$V1 ~ ., data = data)
+      p_values = GQ.function(lm, data)
+      tpr[j, i] = p_values[1] <= 0.05 #adjust for multiple testing? 
+      fpr[j, i] = sum(p_values[2:p] <= 0.05)/(p-1)
+    }
+  }  
+  data.frame("avg_tpr" = rowMeans(tpr),
+             "avg_fpr" = rowMeans(fpr)
+  )
+}
+
+
+
+
+
+
+
+
+
+
+
 GQ.function = function(lm , time, X){
                               p = dim(X)[2]
                               GQ.test = rep(NA, 1 + p)
                               GQ.test[1] = gqtest(lm, order.by = time)[[5]]
 
                               for (i in 2:(p+1)){
+                                
                                              GQ.test[i] = gqtest(lm, order.by = X[,i-1])[[5]]
                               }
                       GQ.test        
